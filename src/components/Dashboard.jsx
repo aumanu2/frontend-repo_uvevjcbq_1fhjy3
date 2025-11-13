@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
-export default function Dashboard() {
+export default function Dashboard({ token, email }) {
+  const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {}
   const [profile, setProfile] = useState({
-    email: '',
+    email: email || '',
     name: '',
     nip: '',
     agency: '',
@@ -15,20 +16,21 @@ export default function Dashboard() {
   })
   const [results, setResults] = useState([])
   const [target, setTarget] = useState('')
-  const [a, setA] = useState('')
-  const [b, setB] = useState('')
+  const [withEmail, setWithEmail] = useState('')
   const [messages, setMessages] = useState([])
   const [content, setContent] = useState('')
 
   const saveProfile = async () => {
-    if (!profile.email) { alert('Masukkan email'); return }
-    const res = await fetch(`${API_BASE}/api/profile`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...profile, is_subscribed: true })
-    })
-    const data = await res.json()
-    alert(`Profil ${data.status}`)
+    try {
+      const res = await fetch(`${API_BASE}/api/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ ...profile, is_subscribed: true })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Gagal menyimpan profil')
+      alert(`Profil ${data.status}`)
+    } catch (e) { alert(e.message) }
   }
 
   const doSearch = async () => {
@@ -41,24 +43,24 @@ export default function Dashboard() {
   }
 
   const loadHistory = async () => {
-    if (!a || !b) return
-    const res = await fetch(`${API_BASE}/api/chat/history?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`)
+    if (!withEmail) return
+    const res = await fetch(`${API_BASE}/api/chat/history?with_email=${encodeURIComponent(withEmail)}`, { headers: { ...authHeaders } })
     const data = await res.json()
     setMessages(data.messages || [])
   }
 
   const sendMessage = async () => {
-    if (!a || !b || !content) return
+    if (!withEmail || !content) return
     await fetch(`${API_BASE}/api/chat/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_email: a, to_email: b, content })
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ to_email: withEmail, content })
     })
     setContent('')
     loadHistory()
   }
 
-  useEffect(() => { if (a && b) loadHistory() }, [a, b])
+  useEffect(() => { if (withEmail) loadHistory() }, [withEmail])
 
   return (
     <section className="bg-gray-50">
@@ -113,14 +115,13 @@ export default function Dashboard() {
         <div className="mt-8 grid md:grid-cols-2 gap-8">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900">Chat</h3>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <input placeholder="Email Anda" value={a} onChange={(e) => setA(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
-              <input placeholder="Email Lawan Bicara" value={b} onChange={(e) => setB(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
+            <div className="grid grid-cols-1 gap-3 mt-2">
+              <input placeholder="Email lawan bicara" value={withEmail} onChange={(e) => setWithEmail(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2" />
             </div>
             <div className="mt-4 h-56 overflow-y-auto rounded-md border border-gray-200 p-3 bg-gray-50">
               {messages.map((m, i) => (
-                <div key={i} className={`mb-2 ${m.from_email === a ? 'text-right' : 'text-left'}`}>
-                  <span className={`inline-block px-3 py-2 rounded-lg ${m.from_email === a ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
+                <div key={i} className={`mb-2 ${m.from_email === email ? 'text-right' : 'text-left'}`}>
+                  <span className={`inline-block px-3 py-2 rounded-lg ${m.from_email === email ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
                     {m.content}
                   </span>
                 </div>
@@ -145,7 +146,6 @@ export default function Dashboard() {
 function AdminPanel() {
   const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
   const [users, setUsers] = useState([])
-  const [email, setEmail] = useState('')
 
   const load = async () => {
     const res = await fetch(`${API_BASE}/api/admin/users`)
